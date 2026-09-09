@@ -102,6 +102,24 @@ async function getRate(apiUrl, account, shipment) {
 }
 
 /**
+ * Known DHL charge codes translated to Thai — DHL's own "name" field is always
+ * English, so without this the breakdown looks inconsistent next to UPS's Thai labels.
+ */
+const DHL_CHARGE_LABELS = {
+    BASE: 'ค่าขนส่งพื้นฐาน (Base Freight)',
+    SF: 'ค่าธรรมเนียมเซ็นรับโดยตรง (Direct Signature)',
+    FF: 'ค่าธรรมเนียมน้ำมัน (Fuel Surcharge)',
+    YK: 'ค่าธรรมเนียมพรีเมียมส่งก่อนเวลา (12:00 Premium)',
+    OF: 'ค่าธรรมเนียมพื้นที่ห่างไกล (Remote Area Delivery)',
+    FD: 'ค่าธรรมเนียมลดคาร์บอน (GoGreen Plus)'
+};
+
+function describeDhlCharge(item, code) {
+    if (DHL_CHARGE_LABELS[code]) return DHL_CHARGE_LABELS[code];
+    return item?.name ? `${item.name} (code ${code})` : `ค่าธรรมเนียมอื่นๆ (code ${code})`;
+}
+
+/**
  * Normalize EVERY product DHL returns (not just the cheapest) — so it can be
  * shown alongside UPS's multiple service codes in the same comparison table.
  */
@@ -122,12 +140,15 @@ function extractAllQuotes(rawResponse) {
 
         const chargeBreakdown = (detailedBilling?.breakdown || [])
             .filter((item) => item?.price !== undefined)
-            .map((item) => ({
-                code: item.serviceCode || item.localServiceCode || item.typeCode || 'BASE',
-                description: item.name || '',
-                amount: roundPrice(asNumber(item.price)),
-                currency
-            }));
+            .map((item) => {
+                const code = item.serviceCode || item.localServiceCode || item.typeCode || 'BASE';
+                return {
+                    code,
+                    description: describeDhlCharge(item, code),
+                    amount: roundPrice(asNumber(item.price)),
+                    currency
+                };
+            });
 
         return {
             serviceCode: product.productCode || null,

@@ -95,7 +95,10 @@ async function quoteAccountAllServices(account, shipment, serviceCodes) {
                 published: publishedQuote.published ?? negotiatedQuote.published ?? null,
                 negotiated: negotiatedQuote.negotiated ?? publishedQuote.negotiated ?? null,
                 alert: negotiatedQuote.alert || publishedQuote.alert || null,
-                chargeBreakdown: publishedQuote.chargeBreakdown,
+                // Breakdown must match whichever total is actually shown (negotiated,
+                // when available) — the negotiated array has its own discounted amounts,
+                // not just a scaled copy of the published one.
+                chargeBreakdown: negotiatedQuote.negotiatedChargeBreakdown || publishedQuote.chargeBreakdown,
                 // Raw UPS responses, untouched — so you can see exactly what UPS actually sent back.
                 rawResponse: {
                     published: publishedRaw,

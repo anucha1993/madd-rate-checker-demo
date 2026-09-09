@@ -114,30 +114,22 @@
             <div class="route-divider" aria-hidden="true"><span>→</span></div>
 
             <fieldset class="route-side">
-              <legend>ปลายทาง (Ship To)</legend>
-              <div class="paste-box">
-                <label>วางที่อยู่เต็ม แล้วให้ระบบแยกจังหวัด/รหัสไปรษณีย์ให้อัตโนมัติ (เฉพาะที่อยู่ไทย)
-                  <textarea class="paste-address" data-target="to" rows="2" placeholder="วางที่อยู่ปลายทางที่นี่"></textarea>
-                </label>
-                <button type="button" class="btn-parse" data-target="to">🪄 แยกข้อมูลอัตโนมัติ</button>
-              </div>
+              <legend>ปลายทาง (Ship To) — ต่างประเทศเท่านั้น</legend>
               <div class="grid-2">
                 <label>ที่อยู่ (บรรทัดที่อยู่)
                   <input type="text" name="to_address" required />
                 </label>
-                <label>อำเภอ/เขต/เมือง
-                  <input type="text" name="to_city" list="amphur-list-to" required />
-                  <span class="field-help">ไทย: พิมพ์ค้นหาหรือกรอกรหัสไปรษณีย์ก่อน — ต่างประเทศ: พิมพ์เอง</span>
+                <label>เมือง (City)
+                  <input type="text" name="to_city" required />
                 </label>
-                <label>จังหวัด/รัฐ
-                  <input type="text" name="to_stateCode" list="province-list" placeholder="เช่น TAS (ออสเตรเลีย) หรือ นนทบุรี" />
-                  <span class="field-help">ไทย: พิมพ์ค้นหาชื่อจังหวัด — ต่างประเทศ: พิมพ์รหัสรัฐ/มณฑลของ UPS</span>
+                <label>รัฐ/มณฑล (State/Province)
+                  <input type="text" name="to_stateCode" placeholder="เช่น NSW, CA, TAS" />
+                  <span class="field-help">กรอกรหัสรัฐ/มณฑลตามที่ UPS กำหนด (ถ้าประเทศปลายทางมีใช้)</span>
                 </label>
-                <label>รหัสไปรษณีย์
+                <label>รหัสไปรษณีย์ปลายทาง
                   <input type="text" name="to_postcode" required />
-                  <span class="field-help">ไทย: กรอกรหัส 5 หลัก จะเติมอำเภอ/เขตและจังหวัดให้อัตโนมัติ</span>
                 </label>
-                <label>🌍 ประเทศ (เช่น AU)
+                <label>🌍 ประเทศปลายทาง (เช่น AU)
                   <input type="text" name="to_country" maxlength="2" required />
                 </label>
               </div>
@@ -146,7 +138,6 @@
 
           <datalist id="province-list"></datalist>
           <datalist id="amphur-list-from"></datalist>
-          <datalist id="amphur-list-to"></datalist>
 
           <div class="submit-row">
             <button type="button" id="btn-next-step">ถัดไป: กรอกรายละเอียดพัสดุ →</button>

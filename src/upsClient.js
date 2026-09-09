@@ -110,6 +110,46 @@ async function getRate(apiUrl, token, shipment, negotiatedIndicator) {
     return response.data;
 }
 
+// Known UPS ItemizedCharges codes that don't already come with a SubType/Description
+// in the raw response, so the breakdown doesn't show a bare, meaningless number.
+const CHARGE_CODE_LABELS = {
+    '375': 'ค่าธรรมเนียมน้ำมัน (Fuel Surcharge)',
+    '270': 'ค่าธรรมเนียมจัดการเพิ่มเติม (Additional Handling)',
+    '440': 'ค่าธรรมเนียมพื้นที่ห่างไกล (Delivery Area Surcharge)'
+};
+
+function describeCharge(item) {
+    if (item?.SubType) return item.SubType.replace(/_/g, ' ');
+    if (item?.Description) return item.Description;
+    if (item?.Code && CHARGE_CODE_LABELS[item.Code]) return CHARGE_CODE_LABELS[item.Code];
+    return item?.Code ? `ค่าธรรมเนียมอื่นๆ (code ${item.Code})` : 'ค่าธรรมเนียมอื่นๆ';
+}
+
+/**
+ * Builds an itemized breakdown that actually sums to the total it belongs to —
+ * base freight PLUS each itemized surcharge, not just the surcharges alone.
+ */
+function buildBreakdown(baseCharge, itemizedCharges, currency) {
+    const lines = [];
+    if (baseCharge?.MonetaryValue != null) {
+        lines.push({
+            code: 'BASE',
+            description: 'ค่าขนส่งพื้นฐาน (Base Freight)',
+            amount: Number(baseCharge.MonetaryValue),
+            currency: baseCharge.CurrencyCode || currency
+        });
+    }
+    for (const item of itemizedCharges || []) {
+        lines.push({
+            code: item?.Code || null,
+            description: describeCharge(item),
+            amount: Number(item?.MonetaryValue ?? 0),
+            currency: item?.CurrencyCode || currency
+        });
+    }
+    return lines;
+}
+
 /**
  * Normalize a raw UPS RateResponse into { published, negotiated, serviceCode, currency, chargeBreakdown }.
  */
@@ -130,12 +170,15 @@ function extractQuote(rawResponse) {
         ? Number(rs.NegotiatedRateCharges.TotalCharge.MonetaryValue)
         : null;
 
-    const chargeBreakdown = (rs.ItemizedCharges || []).map((item) => ({
-        code: item?.Code || null,
-        description: item?.SubType || item?.Description || '',
-        amount: Number(item?.MonetaryValue ?? 0),
-        currency: item?.CurrencyCode || currency
-    }));
+    // Published breakdown (base + surcharges) always sums to `published`.
+    const chargeBreakdown = buildBreakdown(rs.BaseServiceCharge, rs.ItemizedCharges, currency);
+
+    // Negotiated breakdown (base + surcharges, using the DISCOUNTED amounts) always
+    // sums to `negotiated` — a different array from the published one, not just a
+    // scaled-down version of it.
+    const negotiatedChargeBreakdown = rs.NegotiatedRateCharges
+        ? buildBreakdown(rs.NegotiatedRateCharges.BaseServiceCharge, rs.NegotiatedRateCharges.ItemizedCharges, currency)
+        : null;
 
     // UPS almost always includes a caveat that the invoice may differ from this estimate —
     // worth surfacing since it's easy to miss buried in the raw JSON.
@@ -152,7 +195,8 @@ function extractQuote(rawResponse) {
         billedWeight: rs.BillingWeight?.Weight || null,
         billedWeightUnit: rs.BillingWeight?.UnitOfMeasurement?.Code || null,
         alert,
-        chargeBreakdown
+        chargeBreakdown,
+        negotiatedChargeBreakdown
     };
 }
 

@@ -163,10 +163,9 @@ fetch('/api/service-codes')
   })
   .catch(() => {});
 
-// ---------- Optional TH province/postcode reference data ----------
+// ---------- Optional TH province/postcode reference data (Ship From only — Ship To is always international) ----------
 const amphurListEls = {
-  from: document.getElementById('amphur-list-from'),
-  to: document.getElementById('amphur-list-to')
+  from: document.getElementById('amphur-list-from')
 };
 
 fetch('/api/th-address-data')
@@ -175,15 +174,13 @@ fetch('/api/th-address-data')
     thAddressData = data;
     if (data.available) {
       provinceListEl.innerHTML = data.provinces.map((p) => `<option value="${p}">`).join('');
-      const allAmphurOptions = data.amphurs.map((a) => `<option value="${a.name}">`).join('');
-      amphurListEls.from.innerHTML = allAmphurOptions;
-      amphurListEls.to.innerHTML = allAmphurOptions;
+      amphurListEls.from.innerHTML = data.amphurs.map((a) => `<option value="${a.name}">`).join('');
     }
   })
   .catch(() => {});
 
-// ---------- Postcode auto-fill (TH only) — type a postcode, get จังหวัด/อำเภอ suggested ----------
-['from', 'to'].forEach((target) => {
+// ---------- Postcode auto-fill (TH only, Ship From only) — type a postcode, get จังหวัด/อำเภอ suggested ----------
+['from'].forEach((target) => {
   const postcodeField = form[`${target}_postcode`];
   postcodeField.addEventListener('input', () => {
     if (!thAddressData.available) return;
@@ -382,9 +379,11 @@ function renderResult(data) {
 
   // ONE table, every account × every service code as a row — easiest to scan at a glance.
   window.__rawResponses = {}; // stash raw UPS JSON per row so the "raw" button can find it without re-rendering huge strings inline
+  window.__breakdowns = {}; // stash itemized charge breakdown per row for the "รายละเอียด" toggle
 
   const rows = shownResults.map((r, idx) => {
     window.__rawResponses[idx] = r.rawResponse;
+    window.__breakdowns[idx] = { lines: r.chargeBreakdown || [], total: r.negotiated, currency: r.currency };
 
     const isStandardRate = r.carrier === 'DHL' && r.isCustomerAgreement === false;
     const statusBadges = [
@@ -403,7 +402,13 @@ function renderResult(data) {
         <td>${r.billedWeight ? `${r.billedWeight} ${r.billedWeightUnit || ''}` : '—'}</td>
         <td>${fmt(r.negotiated)}</td>
         <td>${statusBadges}</td>
-        <td><button type="button" class="btn-raw" data-idx="${idx}">🧾 Raw</button></td>
+        <td>
+          <button type="button" class="btn-breakdown" data-idx="${idx}">💵 รายละเอียด</button>
+          <button type="button" class="btn-raw" data-idx="${idx}">🧾 Raw</button>
+        </td>
+      </tr>
+      <tr class="breakdown-row hidden" id="breakdown-row-${idx}">
+        <td colspan="7"></td>
       </tr>
       <tr class="raw-row hidden" id="raw-row-${idx}">
         <td colspan="7"><pre class="raw-json"></pre></td>
@@ -422,13 +427,35 @@ function renderResult(data) {
           <th>น้ำหนักที่คิดเงิน</th>
           <th>Negotiated / Rate</th>
           <th>สถานะ</th>
-          <th>Response จริง</th>
+          <th>ตัวเลือก</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
     </table>
   `;
   resultEl.classList.remove('hidden');
+
+  document.querySelectorAll('.btn-breakdown').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const idx = btn.dataset.idx;
+      const row = document.getElementById(`breakdown-row-${idx}`);
+      const cell = row.querySelector('td');
+      if (row.classList.contains('hidden')) {
+        const { lines, total, currency } = window.__breakdowns[idx];
+        const lineRows = lines.length
+          ? lines.map((l) => `<tr><td>${l.description || l.code || ''}</td><td>${fmt(l.amount)}</td></tr>`).join('')
+          : '<tr><td colspan="2">ไม่มีข้อมูลรายละเอียดค่าบริการ</td></tr>';
+        cell.innerHTML = `
+          <table class="breakdown-table">
+            <thead><tr><th>รายการ</th><th>จำนวนเงิน (${currency || 'THB'})</th></tr></thead>
+            <tbody>${lineRows}</tbody>
+            <tfoot><tr><td>รวม</td><td>${fmt(total)}</td></tr></tfoot>
+          </table>
+        `;
+      }
+      row.classList.toggle('hidden');
+    });
+  });
 
   document.querySelectorAll('.btn-raw').forEach((btn) => {
     btn.addEventListener('click', () => {
