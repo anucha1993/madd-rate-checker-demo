@@ -26,7 +26,7 @@ function buildAddressDetails(addr) {
  * except this always asks for EVERY available product (no lowest-only filtering).
  */
 function buildRateRequest(account, shipment) {
-    const { from, to, packages } = shipment;
+    const { from, to, packages, isDocument } = shipment;
 
     const expandedPackages = [];
     for (const pkg of packages) {
@@ -36,11 +36,14 @@ function buildRateRequest(account, shipment) {
             expandedPackages.push({
                 typeCode: '3BX', // Customer supplied box (parcel), same default as agent-service
                 weight: perUnitWeight,
-                dimensions: {
-                    length: Number(pkg.length),
-                    width: Number(pkg.width),
-                    height: Number(pkg.height)
-                }
+                // Documents skip dimensional weight — DHL only needs actual weight for them.
+                ...(isDocument ? {} : {
+                    dimensions: {
+                        length: Number(pkg.length),
+                        width: Number(pkg.width),
+                        height: Number(pkg.height)
+                    }
+                })
             });
         }
     }
@@ -55,7 +58,8 @@ function buildRateRequest(account, shipment) {
         payerCountryCode: from.country,
         plannedShippingDateAndTime: new Date().toISOString(),
         unitOfMeasurement: 'metric',
-        isCustomsDeclarable: from.country !== to.country,
+        // Documents never need a customs declaration, even cross-border.
+        isCustomsDeclarable: !isDocument && from.country !== to.country,
         estimatedDeliveryDate: { isRequested: true, typeCode: 'QDDC' },
         getAdditionalInformation: [{ typeCode: 'allValueAddedServices', isRequested: true }],
         returnStandardProductsOnly: false,
@@ -165,7 +169,8 @@ function extractAllQuotes(rawResponse) {
             estimatedDelivery: product.deliveryCapabilities?.estimatedDeliveryDateAndTime ?? null,
             chargeBreakdown
         };
-    }).filter((q) => q.total != null);
+    }).filter((q) => q.total != null && q.total > 0); // DHL sometimes returns a product with total 0 and an
+    // empty breakdown when the account isn't actually enabled/priced for it — not a real free rate.
 }
 
 module.exports = { getRate, extractAllQuotes };

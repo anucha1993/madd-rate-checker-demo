@@ -150,7 +150,7 @@ function median(values) {
 
 app.post('/api/check-rate', async (req, res) => {
     try {
-        const { from, to, packages, serviceCodes, customAccount, customDhlAccount, accountIds, dhlAccountIds } = req.body;
+        const { from, to, packages, isDocument, serviceCodes, customAccount, customDhlAccount, accountIds, dhlAccountIds } = req.body;
 
         if (!from?.country || !to?.country) {
             return res.status(400).json({ error: 'from.country and to.country are required' });
@@ -159,7 +159,7 @@ app.post('/api/check-rate', async (req, res) => {
             return res.status(400).json({ error: 'At least one package is required' });
         }
 
-        const shipment = { from, to, packages };
+        const shipment = { from, to, packages, isDocument: Boolean(isDocument) };
         const codesToTest = Array.isArray(serviceCodes) && serviceCodes.length > 0
             ? serviceCodes
             : Object.keys(SERVICE_CODES);

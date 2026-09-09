@@ -29,7 +29,7 @@ async function getAccessToken(authUrl, clientId, clientSecret) {
  * Build a UPS RateRequest body from generic shipment fields.
  */
 function buildRateRequest(shipment, negotiatedIndicator) {
-    const { from, to, packages, serviceCode, shipperNumber } = shipment;
+    const { from, to, packages, serviceCode, shipperNumber, isDocument } = shipment;
 
     return {
         RateRequest: {
@@ -67,14 +67,19 @@ function buildRateRequest(shipment, negotiatedIndicator) {
                     }
                 },
                 Service: { Code: serviceCode || '65' },
+                // UPS Letter/Document (Code 01) has NO Dimensions and a different (much lower)
+                // freight+fuel-surcharge base than a Customer Supplied Package (Code 02) —
+                // without this branch documents were silently rated as packages.
                 Package: (packages || []).map((pkg) => ({
-                    PackagingType: { Code: '02' },
-                    Dimensions: {
-                        UnitOfMeasurement: { Code: pkg.dimensionUnit || 'CM' },
-                        Length: String(pkg.length ?? ''),
-                        Width: String(pkg.width ?? ''),
-                        Height: String(pkg.height ?? '')
-                    },
+                    PackagingType: { Code: isDocument ? '01' : '02' },
+                    ...(isDocument ? {} : {
+                        Dimensions: {
+                            UnitOfMeasurement: { Code: pkg.dimensionUnit || 'CM' },
+                            Length: String(pkg.length ?? ''),
+                            Width: String(pkg.width ?? ''),
+                            Height: String(pkg.height ?? '')
+                        }
+                    }),
                     PackageWeight: {
                         UnitOfMeasurement: { Code: pkg.weightUnit || 'KGS' },
                         Weight: String(pkg.weight ?? '')

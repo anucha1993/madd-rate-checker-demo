@@ -332,6 +332,7 @@ form.addEventListener('submit', async (e) => {
       postcode: fd.get('to_postcode'),
       country: fd.get('to_country').toUpperCase()
     },
+    isDocument: fd.get('shipmentType') === 'document',
     packages: [
       {
         quantity: 1,
