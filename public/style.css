@@ -600,6 +600,16 @@ table.result-table th:nth-child(3), table.result-table td:nth-child(3) { text-al
 .row-error td { background: #fef2f2 !important; }
 .row-cheapest td { background: #ecfdf5 !important; }
 
+.account-group-header td {
+  background: #1e293b !important;
+  color: #f1f5f9;
+  font-size: 13px;
+  text-align: left !important;
+  padding: 8px 14px;
+}
+.account-group-header .badge { vertical-align: middle; }
+.sub-cell { color: var(--color-text-muted); }
+
 /* ---------- Raw response viewer ---------- */
 
 .raw-row td { background: #0f172a !important; padding: 0; }

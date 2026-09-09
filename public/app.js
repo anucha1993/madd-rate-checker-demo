@@ -377,43 +377,69 @@ function renderResult(data) {
     .filter((r) => !r.error)
     .sort((a, b) => (a.negotiated ?? a.published ?? Infinity) - (b.negotiated ?? b.published ?? Infinity));
 
-  // ONE table, every account × every service code as a row — easiest to scan at a glance.
+  // Group rows by account (carrier + username), each group sub-divided by service price.
+  // shownResults is already sorted ascending by price overall, so the first appearance of
+  // each group key lands the groups themselves in ascending order of their cheapest service.
   window.__rawResponses = {}; // stash raw UPS JSON per row so the "raw" button can find it without re-rendering huge strings inline
   window.__breakdowns = {}; // stash itemized charge breakdown per row for the "รายละเอียด" toggle
 
-  const rows = shownResults.map((r, idx) => {
-    window.__rawResponses[idx] = r.rawResponse;
-    window.__breakdowns[idx] = { lines: r.chargeBreakdown || [], total: r.negotiated, currency: r.currency };
+  const groups = new Map();
+  shownResults.forEach((r) => {
+    const key = `${r.carrier}::${r.username}`;
+    if (!groups.has(key)) groups.set(key, { carrier: r.carrier, username: r.username, items: [] });
+    groups.get(key).items.push(r);
+  });
 
-    const isStandardRate = r.carrier === 'DHL' && r.isCustomerAgreement === false;
-    const statusBadges = [
-      idx === 0 ? '<span class="badge cheapest">💰 ต่ำสุด</span>' : '',
-      r.anomaly ? '<span class="badge anomaly">⚠️ แปลกจากกลุ่ม</span>' : '',
-      isStandardRate ? '<span class="badge standard-rate" title="บัญชีนี้ยังไม่มีสัญญาราคาพิเศษสำหรับ service นี้ — ราคาที่เห็นคือราคามาตรฐาน ไม่ใช่ราคาสัญญา">⚠️ ราคามาตรฐาน (ไม่ใช่สัญญา)</span>' : ''
-    ].filter(Boolean).join(' ');
-
-    const transitNote = r.transitDays != null ? ` <span class="transit-note">(~${r.transitDays} วัน)</span>` : '';
-
-    return `
-      <tr class="${r.anomaly ? 'row-anomaly' : ''} ${idx === 0 ? 'row-cheapest' : ''}">
-        <td><span class="badge carrier-${(r.carrier || '').toLowerCase()}">${r.carrier || ''}</span></td>
-        <td>${r.username}</td>
-        <td>${r.serviceCode ?? ''} — ${r.serviceLabel || ''}${transitNote}</td>
-        <td>${r.billedWeight ? `${r.billedWeight} ${r.billedWeightUnit || ''}` : '—'}</td>
-        <td>${fmt(r.negotiated)}</td>
-        <td>${statusBadges}</td>
-        <td>
-          <button type="button" class="btn-breakdown" data-idx="${idx}">💵 รายละเอียด</button>
-          <button type="button" class="btn-raw" data-idx="${idx}">🧾 Raw</button>
+  let idx = 0;
+  const rows = [...groups.values()].map((group) => {
+    const cheapestInGroup = group.items[0];
+    const groupHeader = `
+      <tr class="account-group-header">
+        <td colspan="7">
+          <span class="badge carrier-${(group.carrier || '').toLowerCase()}">${group.carrier || ''}</span>
+          บัญชี <strong>${group.username}</strong>
+          — ถูกที่สุดในบัญชีนี้: ${fmt(cheapestInGroup.negotiated)} บาท (${group.items.length} service${group.items.length > 1 ? 's' : ''})
         </td>
       </tr>
-      <tr class="breakdown-row hidden" id="breakdown-row-${idx}">
-        <td colspan="7"></td>
-      </tr>
-      <tr class="raw-row hidden" id="raw-row-${idx}">
-        <td colspan="7"><pre class="raw-json"></pre></td>
-      </tr>
     `;
+
+    const serviceRows = group.items.map((r) => {
+      const rowIdx = idx++;
+      window.__rawResponses[rowIdx] = r.rawResponse;
+      window.__breakdowns[rowIdx] = { lines: r.chargeBreakdown || [], total: r.negotiated, currency: r.currency };
+
+      const isStandardRate = r.carrier === 'DHL' && r.isCustomerAgreement === false;
+      const statusBadges = [
+        rowIdx === 0 ? '<span class="badge cheapest">💰 ต่ำสุด</span>' : '',
+        r.anomaly ? '<span class="badge anomaly">⚠️ แปลกจากกลุ่ม</span>' : '',
+        isStandardRate ? '<span class="badge standard-rate" title="บัญชีนี้ยังไม่มีสัญญาราคาพิเศษสำหรับ service นี้ — ราคาที่เห็นคือราคามาตรฐาน ไม่ใช่ราคาสัญญา">⚠️ ราคามาตรฐาน (ไม่ใช่สัญญา)</span>' : ''
+      ].filter(Boolean).join(' ');
+
+      const transitNote = r.transitDays != null ? ` <span class="transit-note">(~${r.transitDays} วัน)</span>` : '';
+
+      return `
+        <tr class="service-row ${r.anomaly ? 'row-anomaly' : ''} ${rowIdx === 0 ? 'row-cheapest' : ''}">
+          <td><span class="badge carrier-${(r.carrier || '').toLowerCase()}">${r.carrier || ''}</span></td>
+          <td class="sub-cell">↳ ${r.username}</td>
+          <td>${r.serviceCode ?? ''} — ${r.serviceLabel || ''}${transitNote}</td>
+          <td>${r.billedWeight ? `${r.billedWeight} ${r.billedWeightUnit || ''}` : '—'}</td>
+          <td>${fmt(r.negotiated)}</td>
+          <td>${statusBadges}</td>
+          <td>
+            <button type="button" class="btn-breakdown" data-idx="${rowIdx}">💵 รายละเอียด</button>
+            <button type="button" class="btn-raw" data-idx="${rowIdx}">🧾 Raw</button>
+          </td>
+        </tr>
+        <tr class="breakdown-row hidden" id="breakdown-row-${rowIdx}">
+          <td colspan="7"></td>
+        </tr>
+        <tr class="raw-row hidden" id="raw-row-${rowIdx}">
+          <td colspan="7"><pre class="raw-json"></pre></td>
+        </tr>
+      `;
+    }).join('');
+
+    return groupHeader + serviceRows;
   }).join('');
 
   resultEl.innerHTML = `
