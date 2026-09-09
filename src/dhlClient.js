@@ -36,14 +36,15 @@ function buildRateRequest(account, shipment) {
             expandedPackages.push({
                 typeCode: '3BX', // Customer supplied box (parcel), same default as agent-service
                 weight: perUnitWeight,
-                // Documents skip dimensional weight — DHL only needs actual weight for them.
-                ...(isDocument ? {} : {
-                    dimensions: {
-                        length: Number(pkg.length),
-                        width: Number(pkg.width),
-                        height: Number(pkg.height)
-                    }
-                })
+                // DHL has no UPS-style "Letter/Document" packaging concept — omitting
+                // dimensions here does NOT make DHL use just the actual weight, it silently
+                // substitutes a generic ~2kg default parcel profile instead (verified against
+                // the real API). So dimensions must ALWAYS be sent, document or not.
+                dimensions: {
+                    length: Number(pkg.length),
+                    width: Number(pkg.width),
+                    height: Number(pkg.height)
+                }
             });
         }
     }
