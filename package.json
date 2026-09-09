@@ -1,0 +1,21 @@
+{
+  "name": "madd-rate-checker-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone demo tool: compare Published vs Negotiated UPS rates vs the live madd system, and vs a manually entered price.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon --legacy-watch server.js"
+  },
+  "dependencies": {
+    "axios": "^1.13.6",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.1",
+    "express": "^4.18.2",
+    "mysql2": "^3.18.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}

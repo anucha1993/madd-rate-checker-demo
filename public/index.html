@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>UPS Rate Checker Demo</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <header class="app-header">
+      <div class="app-header-icon">🚚</div>
+      <div>
+        <h1>UPS Rate Checker <span class="env-badge" id="env-badge">กำลังตรวจสอบ...</span></h1>
+        <p class="subtitle">เครื่องมือทดสอบ/เทียบราคา UPS แบบ standalone — ยิงตรงไป UPS โดยตรง ไม่ต้องพึ่งระบบ madd อื่นใด</p>
+      </div>
+    </header>
+
+    <div class="tabs">
+      <button type="button" class="tab-btn active" data-tab="tab-shipment"><span class="tab-icon">📦</span> ส่งพัสดุ / ตรวจสอบราคา</button>
+      <button type="button" class="tab-btn" data-tab="tab-settings"><span class="tab-icon">⚙️</span> ตั้งค่า (บัญชี UPS / Service Code)</button>
+    </div>
+
+    <form id="rate-form">
+      <div id="tab-settings" class="tab-panel">
+        <fieldset>
+          <legend>บัญชี UPS — ดึงมาจาก DB ทั้งหมดอัตโนมัติ (ทดสอบทุกบัญชีพร้อมกัน)</legend>
+          <p id="accounts-status" class="hint">กำลังโหลดรายชื่อบัญชี...</p>
+          <div id="accounts-list" class="accounts-list"></div>
+
+          <details class="fallback-accounts">
+            <summary>บัญชีเสริม / กรอกเอง (ใช้เมื่อไม่พบบัญชีใน DB หรืออยากลองบัญชีอื่นเพิ่ม)</summary>
+            <div class="grid-2">
+              <label>Client ID
+                <input type="text" name="clientId" />
+                <span class="field-help">รหัสประจำตัวแอป UPS (ได้จากตอนสมัคร UPS Developer API — ถ้าไม่มีบัญชีเสริมให้เว้นว่างได้)</span>
+              </label>
+              <label>Client Secret
+                <input type="password" name="clientSecret" />
+                <span class="field-help">รหัสลับคู่กับ Client ID (เก็บเป็นความลับ)</span>
+              </label>
+              <label>Shipper Number (ถ้ามี)
+                <input type="text" name="shipperNumber" placeholder="เช่น 884V4F" />
+                <span class="field-help">เลขบัญชีผู้ส่งของ UPS (6 หลัก) ใช้ระบุว่าจะคิดราคาแบบสัญญาของบัญชีไหน</span>
+              </label>
+            </div>
+          </details>
+        </fieldset>
+
+        <fieldset>
+          <legend>Service Code ของ UPS ที่จะทดสอบ (ยิงพร้อมกันทุกตัวที่เลือก จะได้เห็นว่าตัวไหนราคาแปลก)</legend>
+          <div id="service-codes-list" class="accounts-list"></div>
+        </fieldset>
+
+        <fieldset>
+          <legend>บัญชี DHL — ดึงมาจาก DB ทั้งหมดอัตโนมัติ (ทดสอบทุกบัญชีพร้อมกัน)</legend>
+          <p id="dhl-accounts-status" class="hint">กำลังโหลดรายชื่อบัญชี...</p>
+          <div id="dhl-accounts-list" class="accounts-list"></div>
+
+          <details class="fallback-accounts">
+            <summary>บัญชีเสริม / กรอกเอง (ใช้เมื่อไม่พบบัญชีใน DB หรืออยากลองบัญชีอื่นเพิ่ม)</summary>
+            <div class="grid-2">
+              <label>DHL Account Number
+                <input type="text" name="dhlAccountNumber" placeholder="เช่น 560634572" />
+                <span class="field-help">เลขบัญชี DHL ของผู้ส่ง (ใช้อ้างอิงเท่านั้น)</span>
+              </label>
+              <label>Basic Auth Username
+                <input type="text" name="dhlBasicAuthUsername" />
+                <span class="field-help">Username สำหรับยืนยันตัวตนกับ DHL API (ได้จาก DHL Developer Portal)</span>
+              </label>
+              <label>Basic Auth Password
+                <input type="password" name="dhlBasicAuthPassword" />
+                <span class="field-help">Password คู่กับ Username ด้านบน (เก็บเป็นความลับ)</span>
+              </label>
+            </div>
+          </details>
+          <p class="hint">DHL จะคืนค่าทุก service ที่มีให้ในคำขอเดียว ไม่ต้องเลือก service code เหมือน UPS</p>
+        </fieldset>
+      </div>
+
+      <div id="tab-shipment" class="tab-panel active">
+        <div id="step-route">
+          <div class="route-card">
+            <fieldset class="route-side">
+              <legend>ต้นทาง (Ship From)</legend>
+              <div class="paste-box">
+                <label>วางที่อยู่เต็ม แล้วให้ระบบแยกจังหวัด/รหัสไปรษณีย์ให้อัตโนมัติ (เฉพาะที่อยู่ไทย)
+                  <textarea class="paste-address" data-target="from" rows="2" placeholder="เช่น 123 ถ.สุขุมวิท แขวงคลองตัน เขตคลองเตย กรุงเทพมหานคร 10110"></textarea>
+                </label>
+                <button type="button" class="btn-parse" data-target="from">🪄 แยกข้อมูลอัตโนมัติ</button>
+              </div>
+              <div class="grid-2">
+                <label>ที่อยู่ (บรรทัดที่อยู่)
+                  <input type="text" name="from_address" required />
+                </label>
+                <label>อำเภอ/เขต
+                  <input type="text" name="from_city" list="amphur-list-from" required />
+                  <span class="field-help">พิมพ์ค้นหาได้ หรือกรอกรหัสไปรษณีย์ก่อนเพื่อให้เติมอัตโนมัติให้</span>
+                </label>
+                <label>จังหวัด
+                  <input type="text" name="from_province" list="province-list" placeholder="เช่น กรุงเทพมหานคร" />
+                  <span class="field-help">พิมพ์เพื่อค้นหาชื่อจังหวัด (เฉพาะที่อยู่ไทย)</span>
+                </label>
+                <label>รหัสไปรษณีย์
+                  <input type="text" name="from_postcode" required />
+                  <span class="field-help">กรอกรหัส 5 หลัก จะเติมอำเภอ/เขตและจังหวัดให้อัตโนมัติ</span>
+                </label>
+                <label>🌍 ประเทศ (เช่น TH)
+                  <input type="text" name="from_country" maxlength="2" value="TH" required />
+                </label>
+              </div>
+            </fieldset>
+
+            <div class="route-divider" aria-hidden="true"><span>→</span></div>
+
+            <fieldset class="route-side">
+              <legend>ปลายทาง (Ship To)</legend>
+              <div class="paste-box">
+                <label>วางที่อยู่เต็ม แล้วให้ระบบแยกจังหวัด/รหัสไปรษณีย์ให้อัตโนมัติ (เฉพาะที่อยู่ไทย)
+                  <textarea class="paste-address" data-target="to" rows="2" placeholder="วางที่อยู่ปลายทางที่นี่"></textarea>
+                </label>
+                <button type="button" class="btn-parse" data-target="to">🪄 แยกข้อมูลอัตโนมัติ</button>
+              </div>
+              <div class="grid-2">
+                <label>ที่อยู่ (บรรทัดที่อยู่)
+                  <input type="text" name="to_address" required />
+                </label>
+                <label>อำเภอ/เขต/เมือง
+                  <input type="text" name="to_city" list="amphur-list-to" required />
+                  <span class="field-help">ไทย: พิมพ์ค้นหาหรือกรอกรหัสไปรษณีย์ก่อน — ต่างประเทศ: พิมพ์เอง</span>
+                </label>
+                <label>จังหวัด/รัฐ
+                  <input type="text" name="to_stateCode" list="province-list" placeholder="เช่น TAS (ออสเตรเลีย) หรือ นนทบุรี" />
+                  <span class="field-help">ไทย: พิมพ์ค้นหาชื่อจังหวัด — ต่างประเทศ: พิมพ์รหัสรัฐ/มณฑลของ UPS</span>
+                </label>
+                <label>รหัสไปรษณีย์
+                  <input type="text" name="to_postcode" required />
+                  <span class="field-help">ไทย: กรอกรหัส 5 หลัก จะเติมอำเภอ/เขตและจังหวัดให้อัตโนมัติ</span>
+                </label>
+                <label>🌍 ประเทศ (เช่น AU)
+                  <input type="text" name="to_country" maxlength="2" required />
+                </label>
+              </div>
+            </fieldset>
+          </div>
+
+          <datalist id="province-list"></datalist>
+          <datalist id="amphur-list-from"></datalist>
+          <datalist id="amphur-list-to"></datalist>
+
+          <div class="submit-row">
+            <button type="button" id="btn-next-step">ถัดไป: กรอกรายละเอียดพัสดุ →</button>
+          </div>
+        </div>
+
+        <button type="button" id="step-route-summary" class="step-summary hidden"></button>
+
+        <div id="step-package" class="hidden">
+          <fieldset>
+            <legend>ประเภทชิปเมนต์</legend>
+            <div class="shipment-type-row">
+              <label class="shipment-type-card">
+                <input type="radio" name="shipmentType" value="document" id="shipment-type-document" />
+                <span class="icon">📄</span>
+                <span class="label">เอกสาร</span>
+              </label>
+              <label class="shipment-type-card">
+                <input type="radio" name="shipmentType" value="package" id="shipment-type-package" checked />
+                <span class="icon">📦</span>
+                <span class="label">พัสดุ</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="quad-item-wide">
+            <legend>พัสดุ (Package) — หน่วยน้ำหนักคงที่ KGS, หน่วยขนาดคงที่ CM (กรอกทีละกล่อง ชั่ง/วัดจริงต่อกล่อง)</legend>
+            <input type="hidden" name="pkg_weightUnit" value="KGS" />
+            <input type="hidden" name="pkg_dimensionUnit" value="CM" />
+
+            <div class="size-mode-row" id="size-mode-row">
+              <label class="size-mode-option">
+                <input type="radio" name="sizeMode" value="custom" id="size-mode-custom" />
+                กำหนดขนาดเอง
+              </label>
+              <label class="size-mode-option">
+                <input type="radio" name="sizeMode" value="standard" id="size-mode-standard" checked />
+                ขนาดมาตรฐาน
+              </label>
+            </div>
+
+            <div class="box-preset-row" id="box-preset-row">
+              <label class="box-preset-card">
+                <input type="radio" name="boxPreset" data-l="30" data-w="18.2" data-h="10" />
+                <span class="icon">📦</span>
+                <span class="label">กล่องขนาดเล็ก</span>
+                <span class="desc">อุปกรณ์เสริมโทรศัพท์ เครื่องประดับ รองเท้า</span>
+                <span class="dims">L x W x H: 30 x 18.2 x 10 ซม.</span>
+              </label>
+              <label class="box-preset-card">
+                <input type="radio" name="boxPreset" data-l="33.7" data-w="32.2" data-h="18" />
+                <span class="icon">📦</span>
+                <span class="label">กล่องขนาดกลาง</span>
+                <span class="desc">หนังสือ อุปกรณ์ครัว เสื้อผ้าพับ</span>
+                <span class="dims">L x W x H: 33.7 x 32.2 x 18 ซม.</span>
+              </label>
+              <label class="box-preset-card">
+                <input type="radio" name="boxPreset" data-l="33.7" data-w="32.2" data-h="34.5" />
+                <span class="icon">📦</span>
+                <span class="label">กล่องขนาดใหญ่</span>
+                <span class="desc">กระเป๋าเป้ ของตกแต่งบ้าน ของเล่น</span>
+                <span class="dims">L x W x H: 33.7 x 32.2 x 34.5 ซม.</span>
+              </label>
+              <label class="box-preset-card">
+                <input type="radio" name="boxPreset" data-l="41.7" data-w="35.9" data-h="36.9" />
+                <span class="icon">📦</span>
+                <span class="label">กล่องขนาดใหญ่พิเศษ</span>
+                <span class="desc">เครื่องใช้ในครัวเรือน เสื้อผ้าขนาดใหญ่</span>
+                <span class="dims">L x W x H: 41.7 x 35.9 x 36.9 ซม.</span>
+              </label>
+            </div>
+
+            <div class="package-row">
+              <label>น้ำหนัก (กก.)
+                <input type="number" name="pkg_weight" step="0.01" required />
+              </label>
+              <label>กว้าง (ซม.)
+                <input type="number" name="pkg_width" step="0.01" required />
+              </label>
+              <label>ยาว (ซม.)
+                <input type="number" name="pkg_length" step="0.01" required />
+              </label>
+              <label>สูง (ซม.)
+                <input type="number" name="pkg_height" step="0.01" required />
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="submit-row">
+            <button type="submit" id="submit-btn">รับใบเสนอราคา — ตรวจสอบราคา</button>
+          </div>
+        </div>
+
+        <div id="result" class="result hidden"></div>
+        <div id="error" class="error hidden"></div>
+      </div>
+    </form>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
